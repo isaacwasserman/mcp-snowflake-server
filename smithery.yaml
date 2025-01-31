@@ -1,0 +1,55 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - account
+      - warehouse
+      - user
+      - password
+      - role
+      - database
+      - schema
+    properties:
+      account:
+        type: string
+        description: Snowflake account identifier
+      warehouse:
+        type: string
+        description: Snowflake warehouse
+      user:
+        type: string
+        description: Snowflake username
+      password:
+        type: string
+        description: Snowflake password
+      role:
+        type: string
+        description: Snowflake role
+      database:
+        type: string
+        description: Snowflake database
+      schema:
+        type: string
+        description: Snowflake schema
+      allowWrite:
+        type: boolean
+        description: Allow write operations (INSERT, UPDATE, DELETE)
+      logDir:
+        type: string
+        description: Directory path for logs
+      logLevel:
+        type: string
+        description: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+      excludeTools:
+        type: array
+        items:
+          type: string
+        description: List of tool names to exclude
+  commandFunction:
+    # A function that produces the CLI command to start the MCP on stdio.
+    |-
+    config => ({ command: 'mcp_snowflake_server', env: { ACCOUNT: config.account, WAREHOUSE: config.warehouse, USER: config.user, PASSWORD: config.password, ROLE: config.role, DATABASE: config.database, SCHEMA: config.schema, ...(config.allowWrite && { ALLOW_WRITE: '1' }), ...(config.logDir && { LOG_DIR: config.logDir }), ...(config.logLevel && { LOG_LEVEL: config.logLevel }), ...(config.excludeTools && { EXCLUDE_TOOLS: config.excludeTools.join(',') }) } })
