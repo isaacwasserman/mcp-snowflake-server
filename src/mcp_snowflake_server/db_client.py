@@ -29,11 +29,14 @@ class SnowflakeDB:
         """Initialize connection to the Snowflake database"""
         try:
             # Create session without setting specific database and schema
-            self.session = Session.builder.configs(self.connection_config).create()
+            self.session = Session.builder.configs(
+                self.connection_config).create()
 
             # Set initial warehouse if provided, but don't set database or schema
             if "warehouse" in self.connection_config:
-                self.session.sql(f"USE WAREHOUSE {self.connection_config['warehouse'].upper()}")
+                self.session.sql(
+                    f"USE WAREHOUSE {self.connection_config['warehouse'].upper()}"
+                )
 
             self.auth_time = time.time()
         except Exception as e:
@@ -46,13 +49,15 @@ class SnowflakeDB:
         self.init_task = loop.create_task(self._init_database())
         return self.init_task
 
-    async def execute_query(self, query: str) -> tuple[list[dict[str, Any]], str]:
+    async def execute_query(self,
+                            query: str) -> tuple[list[dict[str, Any]], str]:
         """Execute a SQL query and return results as a list of dictionaries"""
         # If init_task exists and isn't done, wait for it to complete
         if self.init_task and not self.init_task.done():
             await self.init_task
         # If session doesn't exist or has expired, initialize it and wait
-        elif not self.session or time.time() - self.auth_time > self.AUTH_EXPIRATION_TIME:
+        elif not self.session or time.time(
+        ) - self.auth_time > self.AUTH_EXPIRATION_TIME:
             await self._init_database()
 
         logger.debug(f"Executing query: {query}")

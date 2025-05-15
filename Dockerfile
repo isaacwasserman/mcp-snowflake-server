@@ -27,11 +27,3 @@ RUN mkdir -p /app/logs
 # Set the entrypoint to handle all arguments
 ENTRYPOINT ["mcp_snowflake_server"]
 
-# Default command (can be overridden)
-CMD ["--account", "your_account", \
-     "--warehouse", "your_warehouse", \
-     "--user", "your_user", \
-     "--password", "your_password", \
-     "--role", "your_role", \
-     "--database", "your_database", \
-     "--schema", "your_schema"] 

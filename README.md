@@ -82,6 +82,41 @@ The server exposes the following tools:
 
 ---
 
+## Usage with Cursor
+
+Clone the repo and them build the docker image.
+
+```bash
+docker build -t mcp-snowflake-server .
+```
+
+Then setup your mcp.json
+
+```json
+"mcpServers": {
+  "snowflake": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--env-file",
+        "ENV_FILE_PATH",
+        "-v",
+        "PATH_TO_SNOWFLAKE_KEY:/app/snowflake_key:ro",
+        "-e",
+        "SNOWFLAKE_PRIVATE_KEY_FILE=/app/snowflake_key",
+        "mcp-snowflake-server"
+      ]
+    }
+  }
+}
+```
+
+Note: the -v and -e are for use with private_key authentication with snowflake. If you're using a password you don't need them.
+
+Use Claude example below if you want to pass params manually.
+
 ## Usage with Claude Desktop
 
 ### Installing via Smithery
