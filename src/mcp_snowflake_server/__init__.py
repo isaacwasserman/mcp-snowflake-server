@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import os
 
+import certifi
 import dotenv
 import snowflake.connector
 
@@ -74,6 +75,15 @@ def main():
 
     dotenv.load_dotenv()
 
+    # Path to the existing CA bundle used by Python
+    cafile = certifi.where()
+    cert_file = os.getenv("NETSKOPE_CERTIFICATE_FILE")
+    if cert_file:
+        # Append the Netskope root CA certificate to the existing CA bundle
+        with open(cafile, 'a') as outfile:
+            with open(cert_file, 'r') as infile:
+                outfile.write(infile.read())
+    
     default_connection_args = snowflake.connector.connection.DEFAULT_CONFIGURATION
 
     connection_args_from_env = {
