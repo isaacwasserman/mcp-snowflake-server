@@ -5,4 +5,5 @@ logs/*
 uv.lock
 src/mcp_snowflake_server/__pycache__
 **/.DS_Store
+.cursor/**
 # dist
