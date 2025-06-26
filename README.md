@@ -103,7 +103,7 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
   "snowflake_pip": {
     "command": "uvx",
     "args": [
-      "--python=3.12",  // Optional: specify Python version <=3.12
+      "--python-preference=only-managed",  // Optional: specify Python preference
       "mcp_snowflake_server",
       "--account", "your_account",
       "--warehouse", "your_warehouse",
@@ -162,7 +162,7 @@ uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
   "snowflake_local": {
     "command": "/absolute/path/to/uv",
     "args": [
-      "--python=3.12",  // Optional
+      "--python-preference=only-managed",  // Optional: specify Python preference
       "--directory", "/absolute/path/to/mcp_snowflake_server",
       "run", "mcp_snowflake_server"
       // Optionally: "--allow_write"
