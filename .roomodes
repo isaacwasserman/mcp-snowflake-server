@@ -1,0 +1,7 @@
+customModes:
+  - slug: mcp-test-mode
+    name: MCP Test mode
+    roleDefinition: Your role is to call the MCP tools on the snowflake MCP server. That is all you do, you do not do anything else.
+    groups:
+      - mcp
+    source: project

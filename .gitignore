@@ -3,6 +3,10 @@ logs/*
 .venv
 .python-version
 uv.lock
-src/mcp_snowflake_server/__pycache__
+**/__pycache__
 **/.DS_Store
+.idea
+.roo
+.vscode
+.coverage
 # dist

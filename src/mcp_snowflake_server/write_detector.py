@@ -1,7 +1,7 @@
 import sqlparse
-from sqlparse.sql import Token, TokenList
+from sqlparse.sql import TokenList
 from sqlparse.tokens import Keyword, DML, DDL
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Set
 
 
 class SQLWriteDetector:
@@ -54,7 +54,8 @@ class SQLWriteDetector:
             "has_cte_write": has_cte_write,
         }
 
-    def _has_cte(self, statement: TokenList) -> bool:
+    @staticmethod
+    def _has_cte(statement: TokenList) -> bool:
         """Check if the statement has a WITH clause."""
         return any(token.is_keyword and token.normalized == "WITH" for token in statement.tokens)
 
@@ -68,9 +69,36 @@ class SQLWriteDetector:
             if token.is_keyword and token.normalized == "WITH":
                 in_cte = True
             elif in_cte:
-                if any(write_kw in token.normalized for write_kw in self.write_keywords):
+                # Check if this token or its children contain write operations
+                cte_operations = self._find_write_operations_in_token(token)
+                if cte_operations:
                     return True
         return False
+
+    def _find_write_operations_in_token(self, token) -> Set[str]:
+        """Find write operations in a single token (including nested tokens)"""
+        operations = set()
+        
+        # Check if token itself is a write keyword
+        if hasattr(token, 'ttype') and (token.ttype in (Keyword, DML, DDL) or token.is_keyword):
+            normalized = token.normalized.upper()
+            if normalized in self.write_keywords:
+                operations.add(normalized)
+        
+        # Check if token contains write keywords in its string representation
+        if hasattr(token, 'normalized'):
+            token_str = token.normalized.upper()
+            for write_kw in self.write_keywords:
+                if write_kw in token_str:
+                    operations.add(write_kw)
+        
+        # Recursively check child tokens if it's a TokenList
+        if isinstance(token, TokenList):
+            for child_token in token.tokens:
+                child_ops = self._find_write_operations_in_token(child_token)
+                operations.update(child_ops)
+        
+        return operations
 
     def _find_write_operations(self, statement: TokenList) -> Set[str]:
         """
@@ -85,7 +113,7 @@ class SQLWriteDetector:
                 continue
 
             # Check if token is a keyword
-            if token.ttype in (Keyword, DML, DDL):
+            if token.ttype in (Keyword, DML, DDL) or token.is_keyword:
                 normalized = token.normalized.upper()
                 if normalized in self.write_keywords:
                     operations.add(normalized)

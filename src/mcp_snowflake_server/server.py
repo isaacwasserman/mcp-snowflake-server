@@ -367,7 +367,6 @@ async def main(
     write_detector = SQLWriteDetector()
 
     tables_info = (await prefetch_tables(db, connection_args)) if prefetch else {}
-    tables_brief = data_to_yaml(tables_info) if prefetch else ""
 
     all_tools = [
         Tool(
