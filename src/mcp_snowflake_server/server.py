@@ -258,6 +258,31 @@ async def handle_read_query(arguments, db, server=None, allow_write=None,
     ]
 
 
+async def handle_get_database_info(arguments, db, server=None, allow_write=None,
+                                   write_detector=None, exclusion_config=None):
+    if not arguments or "database" not in arguments:
+        raise ValueError("Missing database argument")
+
+    database_name = arguments["database"]
+    query = f"SHOW DATABASES LIKE '{database_name.upper()}'"
+    data, data_id = await db.execute_query(query)
+
+    output = {
+        "type": "data",
+        "data_id": data_id,
+        "database": database_name,
+        "data": data,
+    }
+    yaml_output = data_to_yaml(output)
+    json_output = json.dumps(output, default=data_json_serializer)
+    return [
+        types.TextContent(type="text", text=yaml_output),
+        types.EmbeddedResource(
+            type="resource",
+            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+        ),
+    ]
+
 async def handle_append_insight(arguments, db, server=None, allow_write=None,
                                 write_detector=None, exclusion_config=None):
     if not arguments or "insight" not in arguments:
@@ -484,6 +509,21 @@ async def main(
             handler=handle_create_table,
             tags=["write"],
         ),
+        Tool(
+            name="get_database_info",
+            description="Get detailed info for a specific database",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "database": {
+                        "type": "string",
+                        "description": "Database name to get detailed information for"
+                    }
+                },
+                "required": ["database"],
+            },
+            handler=handle_get_database_info,
+        )
     ]
 
     exclude_tags = []

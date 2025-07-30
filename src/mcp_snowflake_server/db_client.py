@@ -57,11 +57,20 @@ class SnowflakeDB:
 
         logger.debug(f"Executing query: {query}")
         try:
-            result = self.session.sql(query).to_pandas()
-            result_rows = result.to_dict(orient="records")
+            # Check if this is a SHOW command or other non-SELECT statement
+            query_upper = query.strip().upper()
+            if not query_upper.startswith('SELECT'):
+                # Use collect() for SHOW commands and similar
+                result_rows = self.session.sql(query).collect()
+                # Convert Row objects to dictionaries
+                result_dicts = [row.as_dict() for row in result_rows]
+            else:
+                # Use to_pandas() for SELECT statements
+                result = self.session.sql(query).to_pandas()
+                result_dicts = result.to_dict(orient="records")
+            
             data_id = str(uuid.uuid4())
-
-            return result_rows, data_id
+            return result_dicts, data_id
 
         except Exception as e:
             logger.error(f'Database error executing "{query}": {e}')
