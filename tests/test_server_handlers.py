@@ -146,7 +146,7 @@ class TestServerHandlers:
         mock_db_client.execute_query.return_value = (query_results, "test-data-id")
         arguments = {"query": "SELECT * FROM users"}
 
-        result = await handle_read_query(arguments, mock_db_client, write_detector)
+        result = await handle_read_query(arguments, mock_db_client, None, False, write_detector, None)
 
         assert len(result) == 2
         assert isinstance(result[0], types.TextContent)
@@ -158,7 +158,7 @@ class TestServerHandlers:
         arguments = {"query": "INSERT INTO users VALUES (1, 'John')"}
 
         with pytest.raises(ValueError, match="Calls to read_query should not contain write operations"):
-            await handle_read_query(arguments, mock_db_client, write_detector)
+            await handle_read_query(arguments, mock_db_client, None, False, write_detector, None)
 
     @pytest.mark.asyncio
     async def test_handle_read_query_missing_query(self, mock_db_client, write_detector):
@@ -171,7 +171,7 @@ class TestServerHandlers:
         """Test successful insight appending"""
         arguments = {"insight": "Users table has grown by 20%"}
 
-        result = await handle_append_insight(arguments, mock_db_client, None, None, mock_server)
+        result = await handle_append_insight(arguments, mock_db_client, mock_server, None, None, None)
 
         assert len(result) == 1
         assert isinstance(result[0], types.TextContent)

@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Optional, Awaitable
 
 import mcp.server.stdio
 import mcp.types as types
@@ -54,14 +54,22 @@ class Tool(BaseModel):
     description: str
     input_schema: dict[str, Any]
     handler: Callable[
-        [str, dict[str, Any] | None],
-        list[types.TextContent | types.ImageContent | types.EmbeddedResource],
+        [
+            dict[str, Any],  # arguments
+            Any,  # db
+            Optional[Server],  # server
+            Optional[bool],  # allow_write
+            Optional[SQLWriteDetector],  # write_detector
+            Optional[dict[str, Any]]  # exclusion_config
+        ],
+        Awaitable[list[types.TextContent | types.ImageContent | types.EmbeddedResource]],
     ]
     tags: list[str] = []
 
 
 # Tool handlers
-async def handle_list_databases(arguments, db, *_, exclusion_config=None):
+async def handle_list_databases(arguments, db, server=None, allow_write=None,
+                                write_detector=None, exclusion_config=None):
     query = "SELECT DATABASE_NAME FROM INFORMATION_SCHEMA.DATABASES"
     data, data_id = await db.execute_query(query)
 
@@ -95,7 +103,8 @@ async def handle_list_databases(arguments, db, *_, exclusion_config=None):
     ]
 
 
-async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
+async def handle_list_schemas(arguments, db, server=None, allow_write=None,
+                              write_detector=None, exclusion_config=None):
     if not arguments or "database" not in arguments:
         raise ValueError("Missing required 'database' parameter")
 
@@ -134,7 +143,8 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
     ]
 
 
-async def handle_list_tables(arguments, db, *_, exclusion_config=None):
+async def handle_list_tables(arguments, db, server=None, allow_write=None,
+                             write_detector=None, exclusion_config=None):
     if not arguments or "database" not in arguments or "schema" not in arguments:
         raise ValueError("Missing required 'database' and 'schema' parameters")
 
@@ -180,7 +190,8 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None):
     ]
 
 
-async def handle_describe_table(arguments, db, *_):
+async def handle_describe_table(arguments, db, server=None, allow_write=None,
+                                write_detector=None, exclusion_config=None):
     if not arguments or "table_name" not in arguments:
         raise ValueError("Missing table_name argument")
 
@@ -221,7 +232,8 @@ async def handle_describe_table(arguments, db, *_):
     ]
 
 
-async def handle_read_query(arguments, db, write_detector, *_):
+async def handle_read_query(arguments, db, server=None, allow_write=None,
+                            write_detector=None, exclusion_config=None):
     if not arguments or "query" not in arguments:
         raise ValueError("Missing query argument")
 
@@ -246,7 +258,8 @@ async def handle_read_query(arguments, db, write_detector, *_):
     ]
 
 
-async def handle_append_insight(arguments, db, _, __, server):
+async def handle_append_insight(arguments, db, server=None, allow_write=None,
+                                write_detector=None, exclusion_config=None):
     if not arguments or "insight" not in arguments:
         raise ValueError("Missing insight argument")
 
@@ -255,7 +268,8 @@ async def handle_append_insight(arguments, db, _, __, server):
     return [types.TextContent(type="text", text="Insight added to memo")]
 
 
-async def handle_write_query(arguments, db, _, allow_write, __):
+async def handle_write_query(arguments, db, server=None, allow_write=None,
+                             write_detector=None, exclusion_config=None):
     if not allow_write:
         raise ValueError("Write operations are not allowed for this data connection")
     if arguments["query"].strip().upper().startswith("SELECT"):
@@ -265,7 +279,8 @@ async def handle_write_query(arguments, db, _, allow_write, __):
     return [types.TextContent(type="text", text=str(results))]
 
 
-async def handle_create_table(arguments, db, _, allow_write, __):
+async def handle_create_table(arguments, db, server=None, allow_write=None,
+                              write_detector=None, exclusion_config=None):
     if not allow_write:
         raise ValueError("Write operations are not allowed for this data connection")
     if not arguments["query"].strip().upper().startswith("CREATE TABLE"):
@@ -536,18 +551,14 @@ async def main(
         if not handler:
             raise ValueError(f"Unknown tool: {name}")
 
-        # Pass exclusion_config to the handler if it's a listing function
-        if name in ["list_databases", "list_schemas", "list_tables"]:
-            return await handler(
-                arguments,
-                db,
-                write_detector,
-                allow_write,
-                server,
-                exclusion_config=exclusion_config,
-            )
-        else:
-            return await handler(arguments, db, write_detector, allow_write, server)
+        return await handler(
+            arguments,
+            db,
+            server,
+            allow_write,
+            write_detector,
+            exclusion_config,
+        )
 
     @server.list_tools()
     async def handle_list_tools() -> list[types.Tool]:
