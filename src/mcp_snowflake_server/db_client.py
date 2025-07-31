@@ -66,21 +66,3 @@ class SnowflakeDB:
         except Exception as e:
             logger.error(f'Database error executing "{query}": {e}')
             raise
-
-    def add_insight(self, insight: str) -> None:
-        """Add a new insight to the collection"""
-        self.insights.append(insight)
-
-    def get_memo(self) -> str:
-        """Generate a formatted memo from collected insights"""
-        if not self.insights:
-            return "No data insights have been discovered yet."
-
-        memo = "📊 Data Intelligence Memo 📊\n\n"
-        memo += "Key Insights Discovered:\n\n"
-        memo += "\n".join(f"- {insight}" for insight in self.insights)
-
-        if len(self.insights) > 1:
-            memo += f"\n\nSummary:\nAnalysis has revealed {len(self.insights)} key data insights that suggest opportunities for strategic optimization and growth."
-
-        return memo

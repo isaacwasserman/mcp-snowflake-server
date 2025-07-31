@@ -246,15 +246,6 @@ async def handle_read_query(arguments, db, write_detector, *_):
     ]
 
 
-async def handle_append_insight(arguments, db, _, __, server):
-    if not arguments or "insight" not in arguments:
-        raise ValueError("Missing insight argument")
-
-    db.add_insight(arguments["insight"])
-    await server.request_context.session.send_resource_updated(AnyUrl("memo://insights"))
-    return [types.TextContent(type="text", text="Insight added to memo")]
-
-
 async def handle_write_query(arguments, db, _, allow_write, __):
     if not allow_write:
         raise ValueError("Write operations are not allowed for this data connection")
@@ -433,22 +424,6 @@ async def main(
             handler=handle_read_query,
         ),
         Tool(
-            name="append_insight",
-            description="Add a data insight to the memo",
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "insight": {
-                        "type": "string",
-                        "description": "Data insight discovered from analysis",
-                    }
-                },
-                "required": ["insight"],
-            },
-            handler=handle_append_insight,
-            tags=["resource_based"],
-        ),
-        Tool(
             name="write_query",
             description="Execute an INSERT, UPDATE, or DELETE query on the Snowflake database",
             input_schema={
@@ -484,14 +459,6 @@ async def main(
     # Register handlers
     @server.list_resources()
     async def handle_list_resources() -> list[types.Resource]:
-        resources = [
-            types.Resource(
-                uri=AnyUrl("memo://insights"),
-                name="Data Insights Memo",
-                description="A living document of discovered data insights",
-                mimeType="text/plain",
-            )
-        ]
         table_brief_resources = [
             types.Resource(
                 uri=AnyUrl(f"context://table/{table_name}"),
@@ -501,14 +468,11 @@ async def main(
             )
             for table_name in tables_info.keys()
         ]
-        resources += table_brief_resources
-        return resources
+        return table_brief_resources
 
     @server.read_resource()
     async def handle_read_resource(uri: AnyUrl) -> str:
-        if str(uri) == "memo://insights":
-            return db.get_memo()
-        elif str(uri).startswith("context://table"):
+        if str(uri).startswith("context://table"):
             table_name = str(uri).split("/")[-1]
             if table_name in tables_info:
                 return data_to_yaml(tables_info[table_name])
@@ -519,11 +483,46 @@ async def main(
 
     @server.list_prompts()
     async def handle_list_prompts() -> list[types.Prompt]:
-        return []
+        return [
+            types.Prompt(
+                name="use-memory-confirmation",
+                description="Do you want to use the memory attached to this mcp?.",
+                arguments=[types.PromptArgument(name="task", description="[yes/no]", required=True)],
+            )
+        ]
+
 
     @server.get_prompt()
     async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
-        raise ValueError(f"Unknown prompt: {name}")
+        if name != "use-memory-confirmation":
+            raise ValueError(f"Unknown prompt: {name}")
+
+        task = (arguments or {}).get("task", "[no task provided]")
+
+        prompt_text = f"""
+    Does the user wants to use the memory? "{task}"
+
+    If the user replies "yes", then:
+        - Whenever something regarding snowflake is asked please use the memory tools before any tool that access snowflake database.
+            - read_graph
+            - search_nodes
+            - open_nodes
+        - Please return the result from the memory if its added there, if its not then ask if the user wants to get it from snowflake and then use the snowflake tools.
+        - After task completion update the memory using:
+            - `create_entities` for new concepts
+            - `add_observations` for new insights
+            - `create_relations` for new connections
+
+    If the user replies "no", continue without using memory.
+    """
+
+        return types.GetPromptResult(
+            description="Prompt that checks whether to use memory before executing a task.",
+            messages=[
+                types.PromptMessage(role="user", content=types.TextContent(type="text", text=prompt_text.strip()))
+            ],
+        )
+
 
     @server.call_tool()
     @handle_tool_errors
@@ -553,7 +552,7 @@ async def main(
     @server.list_tools()
     async def handle_list_tools() -> list[types.Tool]:
         logger.info("Listing tools")
-        logger.error(f"Allowed tools: {allowed_tools}")
+        logger.info(f"Allowed tools: {allowed_tools}")
         tools = [
             types.Tool(
                 name=tool.name,
