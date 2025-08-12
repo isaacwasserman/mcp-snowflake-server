@@ -15,6 +15,7 @@ from src.mcp_snowflake_server.server import (
     handle_append_insight,
     handle_write_query,
     handle_create_table,
+    handle_get_database_info,
     data_to_yaml,
     data_json_serializer,
     handle_tool_errors
@@ -146,7 +147,7 @@ class TestServerHandlers:
         mock_db_client.execute_query.return_value = (query_results, "test-data-id")
         arguments = {"query": "SELECT * FROM users"}
 
-        result = await handle_read_query(arguments, mock_db_client, write_detector)
+        result = await handle_read_query(arguments, mock_db_client, None, False, write_detector, None)
 
         assert len(result) == 2
         assert isinstance(result[0], types.TextContent)
@@ -158,7 +159,7 @@ class TestServerHandlers:
         arguments = {"query": "INSERT INTO users VALUES (1, 'John')"}
 
         with pytest.raises(ValueError, match="Calls to read_query should not contain write operations"):
-            await handle_read_query(arguments, mock_db_client, write_detector)
+            await handle_read_query(arguments, mock_db_client, None, False, write_detector, None)
 
     @pytest.mark.asyncio
     async def test_handle_read_query_missing_query(self, mock_db_client, write_detector):
@@ -171,7 +172,7 @@ class TestServerHandlers:
         """Test successful insight appending"""
         arguments = {"insight": "Users table has grown by 20%"}
 
-        result = await handle_append_insight(arguments, mock_db_client, None, None, mock_server)
+        result = await handle_append_insight(arguments, mock_db_client, mock_server, None, None, None)
 
         assert len(result) == 1
         assert isinstance(result[0], types.TextContent)
@@ -253,6 +254,60 @@ class TestServerHandlers:
 
         with pytest.raises(ValueError, match="Only CREATE TABLE statements are allowed"):
             await handle_create_table(arguments, mock_db_client, None, allow_write, None)
+
+    @pytest.mark.asyncio
+    async def test_handle_get_database_info_success(self, mock_db_client):
+        """Test successful database info retrieval"""
+        sample_database_info = [
+            {
+                "name": "TEST_DATABASE",
+                "created_on": "2023-01-01 12:00:00.000 -0800",
+                "is_default": "N",
+                "is_current": "Y",
+                "database_name": "TEST_DATABASE",
+                "owner": "ACCOUNTADMIN",
+                "comment": "Test database for development",
+                "options": "",
+                "retention_time": "1"
+            }
+        ]
+        mock_db_client.execute_query.return_value = (sample_database_info, "test-data-id")
+        arguments = {"database": "test_database"}
+
+        result = await handle_get_database_info(arguments, mock_db_client)
+
+        assert len(result) == 2
+        assert isinstance(result[0], types.TextContent)
+        assert isinstance(result[1], types.EmbeddedResource)
+
+        # Check YAML content contains database info
+        yaml_content = result[0].text
+        assert "TEST_DATABASE" in yaml_content
+        assert "database: test_database" in yaml_content
+
+        # Check embedded resource
+        resource = result[1].resource
+        assert str(resource.uri) == "data://test-data-id"
+        assert resource.mimeType == "application/json"
+
+        # Check JSON content structure
+        resource_content = json.loads(resource.text)
+        assert resource_content["type"] == "data"
+        assert resource_content["data_id"] == "test-data-id"
+        assert resource_content["database"] == "test_database"
+        assert resource_content["data"] == sample_database_info
+
+        # Verify the query was called with uppercase database name
+        mock_db_client.execute_query.assert_called_once_with("SHOW DATABASES LIKE '%test_database%'")
+
+    @pytest.mark.asyncio
+    async def test_handle_get_database_info_missing_database(self, mock_db_client):
+        """Test database info retrieval with missing database parameter"""
+        with pytest.raises(ValueError, match="Missing database argument"):
+            await handle_get_database_info({}, mock_db_client)
+
+        with pytest.raises(ValueError, match="Missing database argument"):
+            await handle_get_database_info(None, mock_db_client)
 
 
 class TestUtilityFunctions:

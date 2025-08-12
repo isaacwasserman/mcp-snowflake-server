@@ -73,6 +73,18 @@ The server exposes the following tools:
   - `table_name` (string): Fully qualified table name (`database.schema.table`)  
   **Returns:** Array of column definitions with names, types, nullability, defaults, and comments
 
+- **`get_database_info`**
+  Get detailed info for a specific database.
+  **Input:**
+  - `database` (string): Name of the database
+  **Returns:** Dictionary with keys such as comment, created_on, etc for the specific database
+
+- **`get_database_ddl`**
+  Get detailed info for all databases or some databases that match a given pattern. Detailed information includes column names, column types, constraints, and metadata
+  **Input:**
+  - `database` (string): Name of the database substring / pattern
+  **Returns:** Array of dictionaries
+
 #### Analysis Tools
 
 - **`append_insight`**  

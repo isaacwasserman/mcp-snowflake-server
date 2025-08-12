@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Optional, Awaitable
 
 import mcp.server.stdio
 import mcp.types as types
@@ -12,6 +12,7 @@ from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from pydantic import AnyUrl, BaseModel
 
+from .processor import Processor
 from .db_client import SnowflakeDB
 from .write_detector import SQLWriteDetector
 
@@ -54,14 +55,22 @@ class Tool(BaseModel):
     description: str
     input_schema: dict[str, Any]
     handler: Callable[
-        [str, dict[str, Any] | None],
-        list[types.TextContent | types.ImageContent | types.EmbeddedResource],
+        [
+            dict[str, Any],  # arguments
+            Any,  # db
+            Optional[Server],  # server
+            Optional[bool],  # allow_write
+            Optional[SQLWriteDetector],  # write_detector
+            Optional[dict[str, Any]]  # exclusion_config
+        ],
+        Awaitable[list[types.TextContent | types.ImageContent | types.EmbeddedResource]],
     ]
     tags: list[str] = []
 
 
 # Tool handlers
-async def handle_list_databases(arguments, db, *_, exclusion_config=None):
+async def handle_list_databases(arguments, db, server=None, allow_write=None,
+                                write_detector=None, exclusion_config=None):
     query = "SELECT DATABASE_NAME FROM INFORMATION_SCHEMA.DATABASES"
     data, data_id = await db.execute_query(query)
 
@@ -95,7 +104,8 @@ async def handle_list_databases(arguments, db, *_, exclusion_config=None):
     ]
 
 
-async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
+async def handle_list_schemas(arguments, db, server=None, allow_write=None,
+                              write_detector=None, exclusion_config=None):
     if not arguments or "database" not in arguments:
         raise ValueError("Missing required 'database' parameter")
 
@@ -134,7 +144,8 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None):
     ]
 
 
-async def handle_list_tables(arguments, db, *_, exclusion_config=None):
+async def handle_list_tables(arguments, db, server=None, allow_write=None,
+                             write_detector=None, exclusion_config=None):
     if not arguments or "database" not in arguments or "schema" not in arguments:
         raise ValueError("Missing required 'database' and 'schema' parameters")
 
@@ -180,7 +191,8 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None):
     ]
 
 
-async def handle_describe_table(arguments, db, *_):
+async def handle_describe_table(arguments, db, server=None, allow_write=None,
+                                write_detector=None, exclusion_config=None):
     if not arguments or "table_name" not in arguments:
         raise ValueError("Missing table_name argument")
 
@@ -221,7 +233,8 @@ async def handle_describe_table(arguments, db, *_):
     ]
 
 
-async def handle_read_query(arguments, db, write_detector, *_):
+async def handle_read_query(arguments, db, server=None, allow_write=None,
+                            write_detector=None, exclusion_config=None):
     if not arguments or "query" not in arguments:
         raise ValueError("Missing query argument")
 
@@ -245,8 +258,92 @@ async def handle_read_query(arguments, db, write_detector, *_):
         ),
     ]
 
+async def _handle_get_database_internal(db_name, db):
+    if not db_name:
+        query = "SHOW DATABASES"
+    else:
+        query = f"SHOW DATABASES LIKE '%{db_name}%'"
+    return await db.execute_query(query)
 
-async def handle_append_insight(arguments, db, _, __, server):
+
+async def handle_get_database_info(arguments, db, server=None, allow_write=None,
+                                   write_detector=None, exclusion_config=None):
+    if not arguments or "database" not in arguments:
+        raise ValueError("Missing database argument")
+    db_name = arguments["database"]
+    data, data_id = await _handle_get_database_internal(db_name, db)
+    output = {
+        "type": "data",
+        "data_id": data_id,
+        "database": db_name,
+        "data": data,
+    }
+    yaml_output = data_to_yaml(output)
+    json_output = json.dumps(output, default=data_json_serializer)
+    return [
+        types.TextContent(type="text", text=yaml_output),
+        types.EmbeddedResource(
+            type="resource",
+            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+        ),
+    ]
+
+
+async def handle_get_database_ddl(arguments, db, server=None, allow_write=None,
+                                  write_detector=None, exclusion_config=None):
+    databases, data_id = await _handle_get_database_internal(arguments, db)
+
+    # Initialize result
+    all_databases = {
+        "metadata": {
+            "database_count": len(databases)
+        },
+        "databases": {}
+    }
+    processed_count = 0
+    skipped_count = 0
+    error_count = 0
+    processor = Processor(db)
+
+    for database in databases:
+        db_name = database['name']
+        db_kind = database.get('kind')
+
+        # Skip certain database types
+        if db_kind in ['APPLICATION PACKAGE', 'APPLICATION']:
+            logger.info(f"Skipping {db_name} (kind: {db_kind})")
+            skipped_count += 1
+            continue
+
+        # Process database
+        try:
+            logger.info(f"Processing imported database {db_name}")
+            database_structure = await processor.process_database_structure(db_name, database)
+            all_databases["databases"][db_name] = database_structure
+            processed_count += 1
+            logger.info(f"Successfully processed imported database {db_name}")
+        except Exception as e:
+            logger.error(f"Error processing imported database {db_name}: {str(e)}")
+            error_count += 1
+
+    # Finalize output
+    all_databases["metadata"].update({
+        "processed_count": processed_count,
+        "skipped_count": skipped_count,
+        "error_count": error_count,
+    })
+    yaml_output = data_to_yaml(all_databases)
+    json_output = json.dumps(all_databases, default=data_json_serializer)
+    return [
+        types.TextContent(type="text", text=yaml_output),
+        types.EmbeddedResource(
+            type="resource",
+            resource=types.TextResourceContents(uri=f"data://{data_id}", text=json_output, mimeType="application/json"),
+        ),
+    ]
+
+async def handle_append_insight(arguments, db, server=None, allow_write=None,
+                                write_detector=None, exclusion_config=None):
     if not arguments or "insight" not in arguments:
         raise ValueError("Missing insight argument")
 
@@ -255,7 +352,8 @@ async def handle_append_insight(arguments, db, _, __, server):
     return [types.TextContent(type="text", text="Insight added to memo")]
 
 
-async def handle_write_query(arguments, db, _, allow_write, __):
+async def handle_write_query(arguments, db, server=None, allow_write=None,
+                             write_detector=None, exclusion_config=None):
     if not allow_write:
         raise ValueError("Write operations are not allowed for this data connection")
     if arguments["query"].strip().upper().startswith("SELECT"):
@@ -265,7 +363,8 @@ async def handle_write_query(arguments, db, _, allow_write, __):
     return [types.TextContent(type="text", text=str(results))]
 
 
-async def handle_create_table(arguments, db, _, allow_write, __):
+async def handle_create_table(arguments, db, server=None, allow_write=None,
+                              write_detector=None, exclusion_config=None):
     if not allow_write:
         raise ValueError("Write operations are not allowed for this data connection")
     if not arguments["query"].strip().upper().startswith("CREATE TABLE"):
@@ -469,6 +568,36 @@ async def main(
             handler=handle_create_table,
             tags=["write"],
         ),
+        Tool(
+            name="get_database_info",
+            description="Get detailed info for a specific database",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "database": {
+                        "type": "string",
+                        "description": "Database name to get detailed information for"
+                    }
+                },
+                "required": ["database"],
+            },
+            handler=handle_get_database_info,
+        ),
+        Tool(
+            name="get_database_ddl",
+            description="Get DDL in YAML format for databases in the account",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "database": {
+                        "type": "string",
+                        "description": "Database name to get detailed information for"
+                    }
+                },
+                "required": ["database"],
+            },
+            handler=handle_get_database_ddl,
+        )
     ]
 
     exclude_tags = []
@@ -536,18 +665,14 @@ async def main(
         if not handler:
             raise ValueError(f"Unknown tool: {name}")
 
-        # Pass exclusion_config to the handler if it's a listing function
-        if name in ["list_databases", "list_schemas", "list_tables"]:
-            return await handler(
-                arguments,
-                db,
-                write_detector,
-                allow_write,
-                server,
-                exclusion_config=exclusion_config,
-            )
-        else:
-            return await handler(arguments, db, write_detector, allow_write, server)
+        return await handler(
+            arguments,
+            db,
+            server,
+            allow_write,
+            write_detector,
+            exclusion_config,
+        )
 
     @server.list_tools()
     async def handle_list_tools() -> list[types.Tool]:
