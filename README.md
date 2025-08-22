@@ -1,5 +1,7 @@
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/isaacwasserman-mcp-snowflake-server-badge.png)](https://mseep.ai/app/isaacwasserman-mcp-snowflake-server)
 
+[![Trust Score](https://archestra.ai/mcp-catalog/api/badge/quality/isaacwasserman/mcp-snowflake-server)](https://archestra.ai/mcp-catalog/isaacwasserman__mcp-snowflake-server)
+
 # Snowflake MCP Server
 ---
 
