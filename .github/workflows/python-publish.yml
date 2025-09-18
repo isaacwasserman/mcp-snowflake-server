@@ -46,11 +46,6 @@ jobs:
     permissions:
       contents: read
 
-    # Dedicated environments with protections for publishing are strongly recommended.
-    environment:
-      name: private-repo
-      url: https://app.dataops.live/api/v4/projects/5844/packages/pypi
-
     steps:
       - name: Retrieve release distributions
         uses: actions/download-artifact@v4
