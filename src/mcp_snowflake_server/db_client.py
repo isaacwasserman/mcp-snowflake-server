@@ -32,21 +32,23 @@ class SnowflakeDB:
             if "private_key_path" in self.connection_config:
                 from cryptography.hazmat.primitives import serialization
                 with open(self.connection_config["private_key_path"], "rb") as key_file:
+                    passphrase = self.connection_config.get("private_key_passphrase", None)
+
                     p_key = serialization.load_pem_private_key(
                         key_file.read(),
-                        password=None  # If your key is password protected, you'll need to provide it
+                        password=passphrase.encode() if passphrase else None,
                     )
-                    
+
                 pkb = p_key.private_bytes(
                     encoding=serialization.Encoding.DER,
                     format=serialization.PrivateFormat.PKCS8,
                     encryption_algorithm=serialization.NoEncryption()
                 )
-                
+
                 # Replace private_key_path with the actual key content
                 self.connection_config["private_key"] = pkb
                 del self.connection_config["private_key_path"]
-            
+
             # Create session without setting specific database and schema
             self.session = Session.builder.configs(self.connection_config).create()
 
