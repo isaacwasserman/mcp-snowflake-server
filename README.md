@@ -3,6 +3,10 @@
 # Snowflake MCP Server
 ---
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/isaacwasserman-mcp-snowflake-server).
+
 ## Overview
 
 A Model Context Protocol (MCP) server implementation that provides database interaction with Snowflake. This server enables running SQL queries via tools and exposes data insights and schema context as resources.
