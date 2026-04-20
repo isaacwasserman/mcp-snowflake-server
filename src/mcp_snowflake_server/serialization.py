@@ -33,17 +33,19 @@ def json_serializer(obj):
 def _yaml_representer(dumper, data):
     """YAML representer for Snowflake types"""
     serialized = _serialize_value(data)
-    
+
     if serialized is None:
-        return dumper.represent_scalar('tag:yaml.org,2002:null', '')
+        return dumper.represent_scalar("tag:yaml.org,2002:null", "")
     elif isinstance(serialized, bool):
-        return dumper.represent_scalar('tag:yaml.org,2002:bool', str(serialized).lower())
+        return dumper.represent_scalar(
+            "tag:yaml.org,2002:bool", str(serialized).lower()
+        )
     elif isinstance(serialized, int):
-        return dumper.represent_scalar('tag:yaml.org,2002:int', str(serialized))
+        return dumper.represent_scalar("tag:yaml.org,2002:int", str(serialized))
     elif isinstance(serialized, float):
-        return dumper.represent_scalar('tag:yaml.org,2002:float', str(serialized))
+        return dumper.represent_scalar("tag:yaml.org,2002:float", str(serialized))
     else:
-        return dumper.represent_scalar('tag:yaml.org,2002:str', str(serialized))
+        return dumper.represent_scalar("tag:yaml.org,2002:str", str(serialized))
 
 
 # Custom YAML dumper

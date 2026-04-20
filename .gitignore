@@ -2,7 +2,10 @@ logs/*
 .env
 .venv
 .python-version
-uv.lock
 src/mcp_snowflake_server/__pycache__
 **/.DS_Store
 # dist
+connections.toml
+.vscode/
+notebooks/
+private_key*.txt

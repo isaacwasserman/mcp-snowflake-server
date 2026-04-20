@@ -40,7 +40,8 @@ role = "ANALYTICS_ROLE"
 [reporting]
 account = "your_account_id"
 user = "reporting_user"
-private_key_path = "/path/to/private_key.pem"  # Using key-pair authentication
+private_key_file = "/path/to/private_key.pem"  # Using key-pair authentication
+private_key_file_pwd = "your_private_key_file_pwd" # Optional, if your key is encrypted
 warehouse = "REPORTING_WH"
 database = "REPORTING_DB"
 schema = "REPORTS"

@@ -25,8 +25,6 @@ logging.basicConfig(
 logger = logging.getLogger("mcp_snowflake_server")
 
 
-
-
 def handle_tool_errors(func: Callable) -> Callable:
     """Decorator to standardize tool error handling"""
 
@@ -50,12 +48,18 @@ class Tool(BaseModel):
 
 
 # Tool handlers
-async def handle_list_databases(arguments, db, *_, exclusion_config=None, exclude_json_results=False):
+async def handle_list_databases(
+    arguments, db, *_, exclusion_config=None, exclude_json_results=False
+):
     query = "SELECT DATABASE_NAME FROM INFORMATION_SCHEMA.DATABASES"
     data, data_id = await db.execute_query(query)
 
     # Filter out excluded databases
-    if exclusion_config and "databases" in exclusion_config and exclusion_config["databases"]:
+    if (
+        exclusion_config
+        and "databases" in exclusion_config
+        and exclusion_config["databases"]
+    ):
         filtered_data = []
         for item in data:
             db_name = item.get("DATABASE_NAME", "")
@@ -81,14 +85,18 @@ async def handle_list_databases(arguments, db, *_, exclusion_config=None, exclud
             types.EmbeddedResource(
                 type="resource",
                 resource=types.TextResourceContents(
-                    uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+                    uri=f"data://{data_id}",
+                    text=json_output,
+                    mimeType="application/json",
                 ),
             )
         )
     return results
 
 
-async def handle_list_schemas(arguments, db, *_, exclusion_config=None, exclude_json_results=False):
+async def handle_list_schemas(
+    arguments, db, *_, exclusion_config=None, exclude_json_results=False
+):
     if not arguments or "database" not in arguments:
         raise ValueError("Missing required 'database' parameter")
 
@@ -97,7 +105,11 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None, exclude_
     data, data_id = await db.execute_query(query)
 
     # Filter out excluded schemas
-    if exclusion_config and "schemas" in exclusion_config and exclusion_config["schemas"]:
+    if (
+        exclusion_config
+        and "schemas" in exclusion_config
+        and exclusion_config["schemas"]
+    ):
         filtered_data = []
         for item in data:
             schema_name = item.get("SCHEMA_NAME", "")
@@ -124,14 +136,18 @@ async def handle_list_schemas(arguments, db, *_, exclusion_config=None, exclude_
             types.EmbeddedResource(
                 type="resource",
                 resource=types.TextResourceContents(
-                    uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+                    uri=f"data://{data_id}",
+                    text=json_output,
+                    mimeType="application/json",
                 ),
             )
         )
     return results
 
 
-async def handle_list_tables(arguments, db, *_, exclusion_config=None, exclude_json_results=False):
+async def handle_list_tables(
+    arguments, db, *_, exclusion_config=None, exclude_json_results=False
+):
     if not arguments or "database" not in arguments or "schema" not in arguments:
         raise ValueError("Missing required 'database' and 'schema' parameters")
 
@@ -174,7 +190,9 @@ async def handle_list_tables(arguments, db, *_, exclusion_config=None, exclude_j
             types.EmbeddedResource(
                 type="resource",
                 resource=types.TextResourceContents(
-                    uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+                    uri=f"data://{data_id}",
+                    text=json_output,
+                    mimeType="application/json",
                 ),
             )
         )
@@ -190,7 +208,9 @@ async def handle_describe_table(arguments, db, *_, exclude_json_results=False):
 
     # Parse the fully qualified table name
     if len(split_identifier) < 3:
-        raise ValueError("Table name must be fully qualified as 'database.schema.table'")
+        raise ValueError(
+            "Table name must be fully qualified as 'database.schema.table'"
+        )
 
     database_name = split_identifier[0].upper()
     schema_name = split_identifier[1].upper()
@@ -219,14 +239,18 @@ async def handle_describe_table(arguments, db, *_, exclude_json_results=False):
             types.EmbeddedResource(
                 type="resource",
                 resource=types.TextResourceContents(
-                    uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+                    uri=f"data://{data_id}",
+                    text=json_output,
+                    mimeType="application/json",
                 ),
             )
         )
     return results
 
 
-async def handle_read_query(arguments, db, write_detector, *_, exclude_json_results=False):
+async def handle_read_query(
+    arguments, db, write_detector, *_, exclude_json_results=False
+):
     if not arguments or "query" not in arguments:
         raise ValueError("Missing query argument")
 
@@ -248,19 +272,25 @@ async def handle_read_query(arguments, db, write_detector, *_, exclude_json_resu
             types.EmbeddedResource(
                 type="resource",
                 resource=types.TextResourceContents(
-                    uri=f"data://{data_id}", text=json_output, mimeType="application/json"
+                    uri=f"data://{data_id}",
+                    text=json_output,
+                    mimeType="application/json",
                 ),
             )
         )
     return results
 
 
-async def handle_append_insight(arguments, db, _, __, server, exclude_json_results=False):
+async def handle_append_insight(
+    arguments, db, _, __, server, exclude_json_results=False
+):
     if not arguments or "insight" not in arguments:
         raise ValueError("Missing insight argument")
 
     db.add_insight(arguments["insight"])
-    await server.request_context.session.send_resource_updated(AnyUrl("memo://insights"))
+    await server.request_context.session.send_resource_updated(
+        AnyUrl("memo://insights")
+    )
     return [types.TextContent(type="text", text="Insight added to memo")]
 
 
@@ -281,7 +311,11 @@ async def handle_create_table(arguments, db, _, allow_write, __, **___):
         raise ValueError("Only CREATE TABLE statements are allowed")
 
     results, data_id = await db.execute_query(arguments["query"])
-    return [types.TextContent(type="text", text=f"Table created successfully. data_id = {data_id}")]
+    return [
+        types.TextContent(
+            type="text", text=f"Table created successfully. data_id = {data_id}"
+        )
+    ]
 
 
 async def prefetch_tables(db: SnowflakeDB, credentials: dict) -> dict:
@@ -290,14 +324,14 @@ async def prefetch_tables(db: SnowflakeDB, credentials: dict) -> dict:
         logger.info("Prefetching table descriptions")
         table_results, data_id = await db.execute_query(
             f"""SELECT table_name, comment 
-                FROM {credentials['database']}.information_schema.tables 
-                WHERE table_schema = '{credentials['schema'].upper()}'"""
+                FROM {credentials["database"]}.information_schema.tables 
+                WHERE table_schema = '{credentials["schema"].upper()}'"""
         )
 
         column_results, data_id = await db.execute_query(
             f"""SELECT table_name, column_name, data_type, comment 
-                FROM {credentials['database']}.information_schema.columns 
-                WHERE table_schema = '{credentials['schema'].upper()}'"""
+                FROM {credentials["database"]}.information_schema.columns 
+                WHERE table_schema = '{credentials["schema"].upper()}'"""
         )
 
         tables_brief = {}
@@ -307,7 +341,9 @@ async def prefetch_tables(db: SnowflakeDB, credentials: dict) -> dict:
         for row in column_results:
             row_without_table_name = row.copy()
             del row_without_table_name["TABLE_NAME"]
-            tables_brief[row["TABLE_NAME"]]["COLUMNS"][row["COLUMN_NAME"]] = row_without_table_name
+            tables_brief[row["TABLE_NAME"]]["COLUMNS"][row["COLUMN_NAME"]] = (
+                row_without_table_name
+            )
 
         return tables_brief
 
@@ -330,7 +366,9 @@ async def main(
     # Setup logging
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
-        logger.handlers.append(logging.FileHandler(os.path.join(log_dir, "mcp_snowflake_server.log")))
+        logger.handlers.append(
+            logging.FileHandler(os.path.join(log_dir, "mcp_snowflake_server.log"))
+        )
     if log_level:
         logger.setLevel(log_level)
 
@@ -377,7 +415,7 @@ async def main(
     write_detector = SQLWriteDetector()
 
     tables_info = (await prefetch_tables(db, connection_args)) if prefetch else {}
-    tables_brief = to_yaml(tables_info) if prefetch else ""
+    # tables_brief = to_yaml(tables_info) if prefetch else ""
 
     all_tools = [
         Tool(
@@ -437,7 +475,12 @@ async def main(
             description="Execute a SELECT query.",
             input_schema={
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "SELECT SQL query to execute"}},
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "SELECT SQL query to execute",
+                    }
+                },
                 "required": ["query"],
             },
             handler=handle_read_query,
@@ -463,7 +506,9 @@ async def main(
             description="Execute an INSERT, UPDATE, or DELETE query on the Snowflake database",
             input_schema={
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "SQL query to execute"}},
+                "properties": {
+                    "query": {"type": "string", "description": "SQL query to execute"}
+                },
                 "required": ["query"],
             },
             handler=handle_write_query,
@@ -474,7 +519,12 @@ async def main(
             description="Create a new table in the Snowflake database",
             input_schema={
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "CREATE TABLE SQL statement"}},
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "CREATE TABLE SQL statement",
+                    }
+                },
                 "required": ["query"],
             },
             handler=handle_create_table,
@@ -486,7 +536,10 @@ async def main(
     if not allow_write:
         exclude_tags.append("write")
     allowed_tools = [
-        tool for tool in all_tools if tool.name not in exclude_tools and not any(tag in exclude_tags for tag in tool.tags)
+        tool
+        for tool in all_tools
+        if tool.name not in exclude_tools
+        and not any(tag in exclude_tags for tag in tool.tags)
     ]
 
     logger.info("Allowed tools: %s", [tool.name for tool in allowed_tools])
@@ -532,16 +585,27 @@ async def main(
         return []
 
     @server.get_prompt()
-    async def handle_get_prompt(name: str, arguments: dict[str, str] | None) -> types.GetPromptResult:
+    async def handle_get_prompt(
+        name: str, arguments: dict[str, str] | None
+    ) -> types.GetPromptResult:
         raise ValueError(f"Unknown prompt: {name}")
 
     @server.call_tool()
     @handle_tool_errors
-    async def handle_call_tool(name: str, arguments: dict[str, Any] | None) -> list[ResponseType]:
+    async def handle_call_tool(
+        name: str, arguments: dict[str, Any] | None
+    ) -> list[ResponseType]:
         if name in exclude_tools:
-            return [types.TextContent(type="text", text=f"Tool {name} is excluded from this data connection")]
+            return [
+                types.TextContent(
+                    type="text",
+                    text=f"Tool {name} is excluded from this data connection",
+                )
+            ]
 
-        handler = next((tool.handler for tool in allowed_tools if tool.name == name), None)
+        handler = next(
+            (tool.handler for tool in allowed_tools if tool.name == name), None
+        )
         if not handler:
             raise ValueError(f"Unknown tool: {name}")
 

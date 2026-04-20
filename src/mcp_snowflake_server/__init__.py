@@ -1,49 +1,46 @@
 import argparse
 import asyncio
+import logging
 import os
-import sys
 
 import dotenv
 import snowflake.connector
-
-# Handle TOML imports based on Python version
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
+import tomllib
 
 from . import server
+
+logger = logging.getLogger("mcp_snowflake_server")
 
 
 def load_connection_from_toml(toml_file: str, connection_name: str) -> dict:
     """Load connection configuration from a TOML file.
-    
+
     Args:
         toml_file: Path to the TOML file containing connection configurations
         connection_name: Name of the connection to load from the file
-        
+
     Returns:
         Dictionary containing connection parameters
-        
+
     Raises:
         FileNotFoundError: If the TOML file doesn't exist
         KeyError: If the connection name doesn't exist in the file
         ValueError: If the TOML file is invalid
     """
     try:
-        with open(toml_file, 'rb') as f:
+        with open(toml_file, "rb") as f:
             toml_data = tomllib.load(f)
     except FileNotFoundError:
         raise FileNotFoundError(f"TOML file not found: {toml_file}")
     except Exception as e:
         raise ValueError(f"Invalid TOML file: {e}")
-    
+
     # Look for the connection as a top-level section
     if connection_name in toml_data:
         connection_config = toml_data[connection_name]
     else:
         raise KeyError(f"Connection '{connection_name}' not found in TOML file")
-    
+
     return connection_config
 
 
@@ -52,10 +49,18 @@ def parse_args():
 
     # Add arguments
     parser.add_argument(
-        "--allow_write", required=False, default=False, action="store_true", help="Allow write operations on the database"
+        "--allow_write",
+        required=False,
+        default=False,
+        action="store_true",
+        help="Allow write operations on the database",
     )
-    parser.add_argument("--log_dir", required=False, default=None, help="Directory to log to")
-    parser.add_argument("--log_level", required=False, default="INFO", help="Logging level")
+    parser.add_argument(
+        "--log_dir", required=False, default=None, help="Directory to log to"
+    )
+    parser.add_argument(
+        "--log_level", required=False, default="INFO", help="Logging level"
+    )
     parser.add_argument(
         "--prefetch",
         action="store_true",
@@ -83,20 +88,26 @@ def parse_args():
         default=False,
         help="Exclude JSON output from results",
     )
-    
+
     parser.add_argument(
-        "--private_key_path",
+        "--private_key_file",
         required=False,
         help="Path to private key file for authentication",
     )
-    
+
+    parser.add_argument(
+        "--private_key_file_pwd",
+        required=False,
+        help="Passphrase for encrypted private key file (if your private key is password protected)",
+    )
+
     parser.add_argument(
         "--connection-name",
         required=False,
         default=None,
         help="Name of the connection to use from the TOML file",
     )
-    
+
     parser.add_argument(
         "--connections-file",
         required=False,
@@ -131,13 +142,17 @@ def parse_args():
         "prefetch": args.prefetch,
         "exclude_tools": args.exclude_tools,
         "exclude_json_results": args.exclude_json_results,
-        "connection_name": getattr(args, 'connection_name', None),
-        "connections_file": getattr(args, 'connections_file', None),
+        "connection_name": getattr(args, "connection_name", None),
+        "connections_file": getattr(args, "connections_file", None),
     }
 
-    # Add private_key_path if provided
-    if args.private_key_path:
-        connection_args["private_key_path"] = args.private_key_path
+    # Add private_key_file if provided
+    if args.private_key_file:
+        connection_args["private_key_file"] = args.private_key_file
+
+    # Add private_key_file_pwd if provided
+    if args.private_key_file_pwd:
+        connection_args["private_key_file_pwd"] = args.private_key_file_pwd
 
     return server_args, connection_args
 
@@ -156,9 +171,14 @@ def main():
     }
 
     # Add private key path from environment if available
-    private_key_path = os.getenv("SNOWFLAKE_PRIVATE_KEY_PATH")
-    if private_key_path:
-        connection_args_from_env["private_key_path"] = private_key_path
+    private_key_file = os.getenv("SNOWFLAKE_PRIVATE_KEY_FILE")
+    if private_key_file:
+        connection_args_from_env["private_key_file"] = private_key_file
+
+    # Add private key passphrase from environment if available
+    private_key_file_pwd = os.getenv("SNOWFLAKE_PRIVATE_KEY_FILE_PWD")
+    if private_key_file_pwd:
+        connection_args_from_env["private_key_file_pwd"] = private_key_file_pwd
 
     server_args, connection_args = parse_args()
 
@@ -166,28 +186,41 @@ def main():
     if server_args.get("connections_file") and server_args.get("connection_name"):
         connections_file = server_args["connections_file"]
         connection_name = server_args["connection_name"]
-        
+
         try:
-            toml_connection_args = load_connection_from_toml(connections_file, connection_name)
+            toml_connection_args = load_connection_from_toml(
+                connections_file, connection_name
+            )
             # TOML config takes precedence, then command line args, then environment variables
-            connection_args = {**connection_args_from_env, **connection_args, **toml_connection_args}
+            connection_args = {
+                **connection_args_from_env,
+                **connection_args,
+                **toml_connection_args,
+            }
         except (FileNotFoundError, KeyError, ValueError) as e:
             raise ValueError(f"Failed to load TOML configuration: {e}")
-    
+
     elif server_args.get("connections_file") or server_args.get("connection_name"):
         # If only one of the TOML parameters is provided, show an error
-        raise ValueError("Both --connections-file and --connection-name must be provided together")
-    
+        raise ValueError(
+            "Both --connections-file and --connection-name must be provided together"
+        )
+
     else:
         # Use traditional configuration method
         connection_args = {**connection_args_from_env, **connection_args}
 
-    assert (
-        "database" in connection_args
-    ), 'You must provide the database as "--database" argument, "SNOWFLAKE_DATABASE" environment variable, or in the TOML file.'
-    assert (
-        "schema" in connection_args
-    ), 'You must provide the schema as "--schema" argument, "SNOWFLAKE_SCHEMA" environment variable, or in the TOML file.'
+    assert "database" in connection_args, (
+        'You must provide the database as "--database" argument, "SNOWFLAKE_DATABASE" environment variable, or in the TOML file.'
+    )
+    assert "schema" in connection_args, (
+        'You must provide the schema as "--schema" argument, "SNOWFLAKE_SCHEMA" environment variable, or in the TOML file.'
+    )
+
+    logger.info(
+        "Starting MCP Snowflake Server with AUTHENTICATOR='%s'",
+        connection_args.get("authenticator", "?"),
+    )
 
     asyncio.run(
         server.main(

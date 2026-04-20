@@ -1,5 +1,5 @@
-# Use Python 3.12 as the base image
-FROM python:3.12-slim
+# Use Python 3.13 as the base image
+FROM python:3.13-slim
 
 # Set working directory
 WORKDIR /app
@@ -36,9 +36,9 @@ ENTRYPOINT ["mcp_snowflake_server"]
 
 # Default command (can be overridden)
 CMD ["--account", "your_account", \
-     "--warehouse", "your_warehouse", \
-     "--user", "your_user", \
-     "--password", "your_password", \
-     "--role", "your_role", \
-     "--database", "your_database", \
-     "--schema", "your_schema"] 
+    "--warehouse", "your_warehouse", \
+    "--user", "your_user", \
+    "--password", "your_password", \
+    "--role", "your_role", \
+    "--database", "your_database", \
+    "--schema", "your_schema"] 

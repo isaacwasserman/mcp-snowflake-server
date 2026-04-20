@@ -28,31 +28,14 @@ class SnowflakeDB:
     async def _init_database(self):
         """Initialize connection to the Snowflake database"""
         try:
-            # Handle private key authentication
-            if "private_key_path" in self.connection_config:
-                from cryptography.hazmat.primitives import serialization
-                with open(self.connection_config["private_key_path"], "rb") as key_file:
-                    p_key = serialization.load_pem_private_key(
-                        key_file.read(),
-                        password=None  # If your key is password protected, you'll need to provide it
-                    )
-                    
-                pkb = p_key.private_bytes(
-                    encoding=serialization.Encoding.DER,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption()
-                )
-                
-                # Replace private_key_path with the actual key content
-                self.connection_config["private_key"] = pkb
-                del self.connection_config["private_key_path"]
-            
             # Create session without setting specific database and schema
             self.session = Session.builder.configs(self.connection_config).create()
 
             # Set initial warehouse if provided, but don't set database or schema
             if "warehouse" in self.connection_config:
-                self.session.sql(f"USE WAREHOUSE {self.connection_config['warehouse'].upper()}")
+                self.session.sql(
+                    f"USE WAREHOUSE {self.connection_config['warehouse'].upper()}"
+                )
 
             self.auth_time = time.time()
         except Exception as e:
@@ -71,7 +54,9 @@ class SnowflakeDB:
         if self.init_task and not self.init_task.done():
             await self.init_task
         # If session doesn't exist or has expired, initialize it and wait
-        elif not self.session or time.time() - self.auth_time > self.AUTH_EXPIRATION_TIME:
+        elif (
+            not self.session or time.time() - self.auth_time > self.AUTH_EXPIRATION_TIME
+        ):
             await self._init_database()
 
         logger.debug(f"Executing query: {query}")

@@ -1,3 +1,4 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nsphung/mcp-snowflake-server)
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/isaacwasserman-mcp-snowflake-server-badge.png)](https://mseep.ai/app/isaacwasserman-mcp-snowflake-server)
 
 # Snowflake MCP Server
@@ -8,6 +9,8 @@
 A Model Context Protocol (MCP) server implementation that provides database interaction with Snowflake. This server enables running SQL queries via tools and exposes data insights and schema context as resources.
 
 ---
+
+## Deepwiki Documentation [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/nsphung/mcp-snowflake-server)
 
 ## Components
 
@@ -35,14 +38,14 @@ The server exposes the following tools:
   - `query` (string): The `SELECT` SQL query to execute  
     **Returns:** Query results as array of objects
 
-- **`write_query`** (enabled only with `--allow-write`)  
+- **`write_query`** (enabled only with `--allow_write`)  
   Execute `INSERT`, `UPDATE`, or `DELETE` queries.  
   **Input:**
 
   - `query` (string): The SQL modification query  
     **Returns:** Number of affected rows or confirmation
 
-- **`create_table`** (enabled only with `--allow-write`)  
+- **`create_table`** (enabled only with `--allow_write`)  
   Create new tables in the database.  
   **Input:**
   - `query` (string): `CREATE TABLE` SQL statement  
@@ -107,7 +110,7 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
   "snowflake_pip": {
     "command": "uvx",
     "args": [
-      "--python=3.12",  // Optional: specify Python version <=3.12
+      "--python=3.13",  // Optional: specify Python version ==3.13
       "mcp_snowflake_server",
       "--account", "your_account",
       "--warehouse", "your_warehouse",
@@ -116,7 +119,8 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
       "--role", "your_role",
       "--database", "your_database",
       "--schema", "your_schema"
-      // Optionally: "--private_key_path", "your_private_key_absolute_path"
+      // Optionally: "--private_key_file", "your_private_key_absolute_path"
+      // Optionally: "--private_key_file_pwd", "your_passphrase" (if private key is encrypted)
       // Optionally: "--allow_write"
       // Optionally: "--log_dir", "/absolute/path/to/logs"
       // Optionally: "--log_level", "DEBUG"/"INFO"/"WARNING"/"ERROR"/"CRITICAL"
@@ -133,7 +137,7 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
   "snowflake_production": {
     "command": "uvx",
     "args": [
-      "--python=3.12",
+      "--python=3.13",
       "mcp_snowflake_server",
       "--connections-file", "/path/to/snowflake_connections.toml",
       "--connection-name", "production"
@@ -146,7 +150,7 @@ npx -y @smithery/cli install mcp_snowflake_server --client claude
   "snowflake_staging": {
     "command": "uvx",
     "args": [
-      "--python=3.12",
+      "--python=3.13",
       "mcp_snowflake_server",
       "--connections-file", "/path/to/snowflake_connections.toml",
       "--connection-name", "staging"
@@ -177,8 +181,8 @@ SNOWFLAKE_DATABASE="xxx"
 SNOWFLAKE_SCHEMA="xxx"
 SNOWFLAKE_WAREHOUSE="xxx"
 SNOWFLAKE_PASSWORD="xxx"
-SNOWFLAKE_PASSWORD="xxx"
-SNOWFLAKE_PRIVATE_KEY_PATH=/absolute/path/key.p8
+SNOWFLAKE_PRIVATE_KEY_FILE=/absolute/path/key.p8
+SNOWFLAKE_PRIVATE_KEY_FILE_PWD="your_private_key_file_pwd"  # Optional, if your private key is encrypted
 # Alternatively, use external browser authentication:
 # SNOWFLAKE_AUTHENTICATOR="externalbrowser"
 ```
@@ -200,7 +204,7 @@ uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
   "snowflake_local": {
     "command": "/absolute/path/to/uv",
     "args": [
-      "--python=3.12",  // Optional
+      "--python=3.13",  // Optional
       "--directory", "/absolute/path/to/mcp_snowflake_server",
       "run", "mcp_snowflake_server"
       // Optionally: "--allow_write"
@@ -219,7 +223,7 @@ uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
   "snowflake_local": {
     "command": "/absolute/path/to/uv",
     "args": [
-      "--python=3.12",
+      "--python=3.13",
       "--directory", "/absolute/path/to/mcp_snowflake_server",
       "run", "mcp_snowflake_server",
       "--connections-file", "/absolute/path/to/snowflake_connections.toml",
@@ -237,7 +241,7 @@ uv --directory /absolute/path/to/mcp_snowflake_server run mcp_snowflake_server
 
 ## Notes
 
-- By default, **write operations are disabled**. Enable them explicitly with `--allow-write`.
+- By default, **write operations are disabled**. Enable them explicitly with `--allow_write`.
 - The server supports filtering out specific databases, schemas, or tables via exclusion patterns.
 - The server exposes additional per-table context resources if prefetching is enabled.
 - The `append_insight` tool updates the `memo://insights` resource dynamically.
