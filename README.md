@@ -14,7 +14,7 @@ The server exposes a single dynamic resource:
   - Auto-updates as new insights are discovered via the append-insight tool
 
 ### Tools
-The server offers six core tools:
+The server offers these core tools:
 
 #### Query Tools
 - `read_query`
@@ -61,6 +61,14 @@ The server offers six core tools:
   - Returns: Array of column definitions with names and types
 
 #### Analysis Tools
+- `compare_models`
+  - Compare two tables or models and report summary statistics and differing rows
+  - Input:
+    - `base_model` (string): Fully qualified base table name (e.g., `database.schema.table`)
+    - `comparing_model` (string): Fully qualified comparing table name (e.g., `database.schema.table`)
+    - `where_clause` (string, optional): SQL condition applied to both models before comparison, with or without the `WHERE` keyword
+  - Returns: Comparison summary and preview of differing rows
+
 - `append_insight`
   - Add new data insights to the memo resource
   - Input:

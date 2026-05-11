@@ -221,6 +221,29 @@ def escape_literal(value: str) -> str:
     return value.replace("'", "''")
 
 
+def normalize_where_clause(where_clause: str | None) -> str:
+    """Normalize an optional SQL WHERE clause fragment."""
+
+    if where_clause is None:
+        return ""
+    if not isinstance(where_clause, str):
+        raise ValueError("where_clause must be a string")
+
+    normalized = where_clause.strip()
+    if not normalized:
+        return ""
+
+    if normalized.upper() == "WHERE":
+        raise ValueError("where_clause must include a condition")
+    if normalized.upper().startswith("WHERE "):
+        normalized = normalized[6:].strip()
+
+    if ";" in normalized:
+        raise ValueError("where_clause must not contain semicolons")
+
+    return normalized
+
+
 def fetch_table_columns(db: SnowflakeDB, metadata_parts: list[str]) -> list[str]:
     """Fetch ordered column names for a given table using information_schema."""
 
@@ -450,6 +473,7 @@ async def handle_compare_models(arguments, db, *_):
     base_model = arguments["base_model"]
     comparing_model = arguments["comparing_model"]
     column_source = arguments.get("column_source", "base").lower()
+    where_clause = normalize_where_clause(arguments.get("where_clause"))
 
     if column_source not in {"base", "comparing"}:
         raise ValueError("column_source must be either 'base' or 'comparing'")
@@ -482,6 +506,7 @@ async def handle_compare_models(arguments, db, *_):
         column_list = [column_list_arg]
     else:
         column_list = list(column_list_arg)
+    column_list_provided = bool(column_list)
 
     base_parts, base_metadata_parts = parse_table_identifier(base_model)
     compare_parts, compare_metadata_parts = parse_table_identifier(comparing_model)
@@ -519,26 +544,27 @@ async def handle_compare_models(arguments, db, *_):
             + ", ".join(missing_in_compare)
         )
 
-    column_list = ", ".join(selected_columns)
+    column_sql = ", ".join(selected_columns)
 
     base_fqn = ".".join(part.upper() for part in base_parts)
     compare_fqn = ".".join(part.upper() for part in compare_parts)
+    where_sql = f"\n    WHERE {where_clause}" if where_clause else ""
 
     base_cte = f"""
 WITH base_model AS (
-    SELECT {column_list}
-    FROM {base_fqn}
+    SELECT {column_sql}
+    FROM {base_fqn}{where_sql}
 ),
 compare_model AS (
-    SELECT {column_list}
-    FROM {compare_fqn}
+    SELECT {column_sql}
+    FROM {compare_fqn}{where_sql}
 )"""
 
     # Sample some rows to estimate size and calculate dynamic limit
     sample_query = f"""
 {base_cte},
 sample_rows AS (
-    SELECT {column_list}
+    SELECT {column_sql}
     FROM base_model
     LIMIT 5
 )
@@ -562,17 +588,17 @@ SELECT * FROM sample_rows
 base_counts AS (SELECT COUNT(*) AS base_row_count FROM base_model),
 compare_counts AS (SELECT COUNT(*) AS compare_row_count FROM compare_model),
 base_only AS (
-    SELECT {column_list}
+    SELECT {column_sql}
     FROM base_model
     MINUS
-    SELECT {column_list}
+    SELECT {column_sql}
     FROM compare_model
 ),
 compare_only AS (
-    SELECT {column_list}
+    SELECT {column_sql}
     FROM compare_model
     MINUS
-    SELECT {column_list}
+    SELECT {column_sql}
     FROM base_model
 ),
 base_only_count AS (SELECT COUNT(*) AS base_only_count FROM base_only),
@@ -598,17 +624,17 @@ FROM base_counts, compare_counts, matching, base_only_count, compare_only_count
     diff_query = f"""
 {base_cte},
 diff_compare_only AS (
-    SELECT 'in_comparing_not_base' AS difference_type, {column_list}
+    SELECT 'in_comparing_not_base' AS difference_type, {column_sql}
     FROM compare_model
     MINUS
-    SELECT 'in_comparing_not_base' AS difference_type, {column_list}
+    SELECT 'in_comparing_not_base' AS difference_type, {column_sql}
     FROM base_model
 ),
 diff_base_only AS (
-    SELECT 'in_base_not_comparing' AS difference_type, {column_list}
+    SELECT 'in_base_not_comparing' AS difference_type, {column_sql}
     FROM base_model
     MINUS
-    SELECT 'in_base_not_comparing' AS difference_type, {column_list}
+    SELECT 'in_base_not_comparing' AS difference_type, {column_sql}
     FROM compare_model
 )
 SELECT *
@@ -629,10 +655,11 @@ LIMIT {effective_limit}
         "type": "model_comparison_summary",
         "base_model": base_model,
         "comparing_model": comparing_model,
-        "column_source": column_source if not column_list else None,
+        "where_clause": where_clause or None,
+        "column_source": column_source if not column_list_provided else None,
         "columns_compared": selected_columns,
-        "column_list_provided": bool(column_list),
-        "except_columns": except_columns if not column_list else [],
+        "column_list_provided": column_list_provided,
+        "except_columns": except_columns if not column_list_provided else [],
         "stats_data_id": stats_data_id,
         "statistics": stats_row,
         "differences_data_id": differences_data_id,
@@ -649,6 +676,7 @@ LIMIT {effective_limit}
         "data_id": differences_data_id,
         "base_model": base_model,
         "comparing_model": comparing_model,
+        "where_clause": where_clause or None,
         "difference_rows": differences_data,
         "preview_limit": effective_limit,
         "user_specified_limit": preview_limit,
@@ -859,6 +887,10 @@ async def main(
                     "comparing_model": {
                         "type": "string",
                         "description": "Fully qualified table name for the comparing model (database.schema.table)",
+                    },
+                    "where_clause": {
+                        "type": "string",
+                        "description": "Optional SQL WHERE condition applied to both models before comparison. May include or omit the WHERE keyword. Semicolons are not allowed.",
                     },
                     "column_source": {
                         "type": "string",
